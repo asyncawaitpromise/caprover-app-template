@@ -48,11 +48,13 @@ Netlify and Vercel are great for static sites and serverless functions. This tem
 │   └── requireAdmin.mjs
 ├── scripts/
 │   ├── scaffold.sh          # One-time CapRover app setup
+│   ├── deploy-tar.sh        # Manual deploy via tarball (no CI or registry needed)
 │   ├── sync-secrets.sh      # Push .env.local → GitHub Secrets + CapRover
 │   ├── env-crypt.sh         # GPG-encrypt .env.local for git storage
 │   ├── bootstrap.sh         # Decrypt .env.local on a new machine
 │   ├── localDev.mjs         # Seeds dev user, auto-generates JWT_SECRET
 │   └── postinstall.mjs      # Rebuilds better-sqlite3 on Android/Termux
+├── captain-definition       # Tells CapRover to build using ./Dockerfile (used by deploy-tar.sh)
 ├── config/
 │   └── admins.json          # Static admin email allowlist
 ├── .github/workflows/
@@ -93,6 +95,10 @@ The `dev` script uses `nodemon` for the backend and `vite` for the frontend via 
 
 ### First deploy
 
+**Option A — CI deploy (recommended for ongoing use)**
+
+Builds the Docker image in GitHub Actions, pushes to GHCR, and deploys automatically on every push to `master`.
+
 ```bash
 # 1. Create the CapRover app and set all env vars
 bash scripts/scaffold.sh
@@ -103,6 +109,26 @@ bash scripts/sync-secrets.sh
 # 3. Push to master — GitHub Actions does the rest
 git push origin master
 ```
+
+**Option B — Manual tar deploy (no CI or container registry needed)**
+
+Packages the project source into a tar and uploads it to CapRover, which builds the Docker image on the server. Useful for one-off deploys, servers without GHCR access, or when you don't want to set up GitHub Actions.
+
+```bash
+# Requires the caprover CLI to be installed and logged in
+npm install -g caprover
+caprover login
+
+# Deploy
+bash scripts/deploy-tar.sh
+
+# Preview what would happen without deploying
+bash scripts/deploy-tar.sh --dry-run
+```
+
+The `captain-definition` file at the project root tells CapRover to build using the existing `Dockerfile`. The tar excludes `node_modules`, `.env*`, `data/`, and `.git` — the same as `.dockerignore`.
+
+> **Note:** The tarball method builds the Docker image on your CapRover server, which is CPU and memory intensive during the build. On a small VPS the build may take several minutes.
 
 ### Encrypted secrets (optional)
 
