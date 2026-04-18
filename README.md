@@ -164,6 +164,43 @@ const es = new EventSource(`/api/sse/stream?token=${token}`)
 es.addEventListener('update', (e) => console.log(JSON.parse(e.data)))
 ```
 
+## Performance and resource usage
+
+### Memory footprint
+
+At idle, the container uses roughly **50–80 MB** of RAM (Node process + Express + SQLite). CapRover's nginx layer adds another ~20 MB. On a 512 MB VPS you can comfortably run **2–3 of these apps simultaneously** alongside CapRover itself.
+
+### The event loop is genuinely idle at low traffic
+
+There is no busy-waiting. SSE connections use a 30-second `setInterval` heartbeat — the timer fires, writes one frame, then yields. The `EventEmitter` in `events.mjs` has zero cost when nothing is emitted. Node's event loop will sleep when there are no requests.
+
+### bcryptjs blocks the event loop on login/signup
+
+`bcryptjs` is pure JavaScript. Every `bcrypt.hash()` or `bcrypt.compare()` call (cost factor 12) takes **~200–400 ms of synchronous CPU time** on the main thread, blocking all other requests for that duration.
+
+This is fine for apps with a handful of logins per minute. If you expect concurrent logins, consider:
+
+- **Switching to native `bcrypt`** (uses libuv worker threads, non-blocking)
+- **Lowering the cost factor to 10** (~4× faster, still acceptable security)
+- **Switching to `argon2`** (modern standard, worker-thread-friendly)
+
+### requireAuth hits the database on every request
+
+`requireAuth` does a SQLite lookup by user ID on every authenticated endpoint, beyond just verifying the JWT. This catches deleted/disabled users but adds one synchronous read per request. With `better-sqlite3` and WAL mode this is ~0.1 ms — negligible at low traffic, but worth knowing.
+
+### SQLite allows one writer at a time
+
+WAL mode handles concurrent reads well. Concurrent writes are serialized — SQLite queues them. This is fine for small apps but becomes a bottleneck under high write concurrency.
+
+### Rough traffic capacity
+
+| Scenario | Capacity |
+|---|---|
+| Static file requests | Thousands/sec (served from disk) |
+| Authenticated API calls | Hundreds/sec |
+| Active SSE connections | Thousands (memory-bound, ~a few KB each) |
+| Concurrent logins/signups | 2–5 before latency degrades (bcryptjs bottleneck) |
+
 ## License
 
 MIT
