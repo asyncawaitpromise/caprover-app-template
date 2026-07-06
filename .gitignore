@@ -2,6 +2,7 @@ node_modules
 client/node_modules
 dist
 .env*
+!.env.example
 !.env.local.enc
 *.db
 *.sqlite
