@@ -2,7 +2,7 @@ name: Preview
 
 on:
   push:
-    branches-ignore: ["master"]
+    branches-ignore: ["master", "main"]
   delete:
   workflow_dispatch:
     inputs:
