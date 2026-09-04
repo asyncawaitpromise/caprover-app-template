@@ -187,16 +187,20 @@ if ! $GH_ONLY; then
       --path /user/apps/appDefinitions \
       --data '{}' \
       --output "$TMPFILE"
-    CONTAINER_PORT=$(jq --arg app "$CAPROVER_APP" \
-      '.appDefinitions[] | select(.appName == $app) | .containerHttpPort // 8080' \
+    EXISTING=$(jq --arg app "$CAPROVER_APP" \
+      '.appDefinitions[] | select(.appName == $app)' \
       "$TMPFILE")
     rm -f "$TMPFILE"
 
-    APP_CONFIG=$(jq -n \
-      --arg app "$CAPROVER_APP" \
-      --argjson env "$ENV_JSON" \
-      --argjson port "$CONTAINER_PORT" \
-      '{"appName": $app, "envVars": $env, "containerHttpPort": $port}')
+    if [[ -z "$EXISTING" ]]; then
+      echo "Error: app '$CAPROVER_APP' not found on CapRover — run scaffold.sh first" >&2
+      exit 1
+    fi
+
+    # CapRover's appDefinitions/update fully replaces the app definition rather
+    # than merging fields, so start from the existing definition and only patch
+    # envVars — this preserves instanceCount, volumes, and everything else.
+    APP_CONFIG=$(echo "$EXISTING" | jq --argjson env "$ENV_JSON" '.envVars = $env')
 
     caprover api \
       --caproverName "$CAPROVER_NAME" \
