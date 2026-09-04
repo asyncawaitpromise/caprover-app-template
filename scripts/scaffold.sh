@@ -191,6 +191,15 @@ else
 fi
 
 # ============================================================
+# 6. Scheduled disk cleanup (keep 1 image per app, run nightly)
+# ============================================================
+echo ""
+echo "==> Configuring nightly disk cleanup..."
+CLEANUP_BODY=$(jq -nc '{"mostRecentLimit":1,"cronSchedule":"0 3 * * *","timezone":"UTC"}')
+cap_api POST /api/v2/user/system/diskcleanup/ "$CLEANUP_BODY" || \
+  echo "  Warning: disk cleanup config failed — set manually in CapRover dashboard (Settings > Disk Cleanup)"
+
+# ============================================================
 echo ""
 echo "Scaffolding complete."
 echo ""
