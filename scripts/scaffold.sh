@@ -58,7 +58,7 @@ CUSTOM_DOMAIN="${APP_NAME}.${APP_DOMAIN}"
 echo "==> Verifying caprover CLI login for $CAPROVER_URL..."
 
 CAPROVER_NAME=$(caprover ls 2>/dev/null \
-  | awk -v url="$CAPROVER_URL" '$0 ~ url { print $2 }')
+  | awk -v url="${CAPROVER_URL%/}" '$0 ~ url { print $2 }')
 
 if [[ -z "$CAPROVER_NAME" ]]; then
   echo "Error: no caprover CLI session found for $CAPROVER_URL" >&2
@@ -118,7 +118,7 @@ done
 CONTAINER_PORT="$(get PORT)"
 CONTAINER_PORT="${CONTAINER_PORT:-8080}"
 
-APP_CONFIG=$(jq -n \
+DEFAULT_APP_CONFIG=$(jq -n \
   --arg app "$APP_NAME" \
   --argjson env "$ENV_JSON" \
   --argjson port "$CONTAINER_PORT" \
@@ -133,6 +133,45 @@ APP_CONFIG=$(jq -n \
     "ports": [],
     "notExposeAsWebApp": false
   }')
+
+if $DRY_RUN; then
+  # No live state to merge against in dry-run — show the config that would
+  # apply to a fresh app; a real re-run instead patches the existing definition.
+  APP_CONFIG="$DEFAULT_APP_CONFIG"
+else
+  TMPFILE=$(mktemp)
+  caprover api \
+    --caproverName "$CAPROVER_NAME" \
+    --method GET \
+    --path /user/apps/appDefinitions \
+    --data '{}' \
+    --output "$TMPFILE"
+  EXISTING=$(jq --arg app "$APP_NAME" \
+    '.appDefinitions[] | select(.appName == $app)' \
+    "$TMPFILE")
+  rm -f "$TMPFILE"
+
+  if [[ -z "$EXISTING" ]]; then
+    APP_CONFIG="$DEFAULT_APP_CONFIG"
+  else
+    # CapRover's appDefinitions/update fully replaces the app definition rather
+    # than merging fields, so start from the existing definition and only patch
+    # the fields this script manages — upsert envVars by key (preserving keys
+    # set elsewhere, e.g. by sync-secrets.sh) and only fill in default volumes
+    # if none are already configured (never clobber a custom mount).
+    APP_CONFIG=$(echo "$EXISTING" | jq \
+      --argjson newEnv "$ENV_JSON" \
+      --argjson port "$CONTAINER_PORT" \
+      '
+      ($newEnv | map(.key)) as $newKeys
+      | .envVars = ((.envVars // []) | map(select((.key as $k | $newKeys | index($k)) | not))) + $newEnv
+      | .containerHttpPort = $port
+      | if ((.volumes // []) | length) == 0 then
+          .volumes = [{"containerPath": "/app/data", "volumeName": (.appName + "-data")}]
+        else . end
+      ')
+  fi
+fi
 
 cap_api POST /api/v2/user/apps/appDefinitions/update "$APP_CONFIG"
 
@@ -182,7 +221,7 @@ if [[ -n "$APP_DOMAIN" ]]; then
 
   echo "==> Enabling HTTPS on $CUSTOM_DOMAIN..."
   echo "    (requires DNS A record for $CUSTOM_DOMAIN pointing to this CapRover server)"
-  cap_api POST /api/v2/user/apps/enablecustomdomainssl \
+  cap_api POST /api/v2/user/apps/appDefinitions/enablecustomdomainssl \
     "{\"appName\": \"$APP_NAME\", \"customDomain\": \"$CUSTOM_DOMAIN\"}" || \
     echo "  Warning: SSL failed — ensure DNS is propagated and try again, or enable via dashboard"
 else

@@ -129,7 +129,7 @@ if ! $GH_ONLY; then
   done
 
   CAPROVER_NAME=$(caprover ls 2>/dev/null \
-    | awk -v url="$CAPROVER_URL" '$0 ~ url { print $2 }')
+    | awk -v url="${CAPROVER_URL%/}" '$0 ~ url { print $2 }')
   if [[ -z "$CAPROVER_NAME" ]]; then
     echo "Error: no caprover CLI session found for $CAPROVER_URL" >&2
     echo "       Run: caprover login" >&2
@@ -153,7 +153,7 @@ if ! $CAP_ONLY; then
       printf "  %-30s [dry-run]\n" "$secret"
     else
       printf "  %-30s " "$secret"
-      printf '%s' "$val" | gh secret set "$secret" --body-file -
+      printf '%s' "$val" | gh secret set "$secret"
       echo "ok"
     fi
   done
