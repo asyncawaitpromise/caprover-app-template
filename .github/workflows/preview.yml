@@ -86,17 +86,31 @@ jobs:
             --arg app "$APP_NAME" \
             --arg jwt "${{ secrets.JWT_SECRET }}" \
             '{"appName":$app,"instanceCount":1,"envVars":[{"key":"NODE_ENV","value":"production"},{"key":"PORT","value":"8080"},{"key":"JWT_SECRET","value":$jwt}]}')
-          curl -sf -X POST "$CAPROVER_URL/api/v2/user/apps/appDefinitions/update" \
+          UPDATE_RESPONSE=$(curl -sf -X POST "$CAPROVER_URL/api/v2/user/apps/appDefinitions/update" \
             -H "Content-Type: application/json" \
             -H "x-captain-auth: $ADMIN_TOKEN" \
-            -d "$ENV_VARS"
+            -d "$ENV_VARS")
+
+          echo "$UPDATE_RESPONSE" | jq .
+          # CapRover's API always responds HTTP 200, even on its own internal
+          # errors — the real result is in the status field (100 = success).
+          if [[ "$(echo "$UPDATE_RESPONSE" | jq -r '.status')" != "100" ]]; then
+            echo "::error::CapRover app config update failed: $(echo "$UPDATE_RESPONSE" | jq -r '.description')"
+            exit 1
+          fi
 
           CAPTAIN_DEF=$(jq -nc --arg img "$IMAGE" '{"schemaVersion":2,"imageName":$img}')
           BODY=$(jq -nc --arg def "$CAPTAIN_DEF" '{"captainDefinitionContent":$def,"gitHash":""}')
-          curl -sf -X POST "$CAPROVER_URL/api/v2/user/apps/appData/$APP_NAME" \
+          DEPLOY_RESPONSE=$(curl -sf -X POST "$CAPROVER_URL/api/v2/user/apps/appData/$APP_NAME" \
             -H "Content-Type: application/json" \
             -H "x-captain-auth: $ADMIN_TOKEN" \
-            -d "$BODY"
+            -d "$BODY")
+
+          echo "$DEPLOY_RESPONSE" | jq .
+          if [[ "$(echo "$DEPLOY_RESPONSE" | jq -r '.status')" != "100" ]]; then
+            echo "::error::CapRover preview deploy failed: $(echo "$DEPLOY_RESPONSE" | jq -r '.description')"
+            exit 1
+          fi
 
       - name: Print preview URL
         run: echo "Preview URL https://$APP_NAME.${{ secrets.CAPROVER_APP_DOMAIN }}"
