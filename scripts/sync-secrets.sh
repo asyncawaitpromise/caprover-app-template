@@ -17,6 +17,8 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/caprover-cli.sh"
+
 ENV_FILE=".env.local"
 DRY_RUN=false
 GH_ONLY=false
@@ -128,7 +130,7 @@ if ! $GH_ONLY; then
     fi
   done
 
-  CAPROVER_NAME=$(caprover ls 2>/dev/null \
+  CAPROVER_NAME=$(caprover_list \
     | awk -v url="${CAPROVER_URL%/}" '$0 ~ url { print $2 }')
   if [[ -z "$CAPROVER_NAME" ]]; then
     echo "Error: no caprover CLI session found for $CAPROVER_URL" >&2
@@ -181,7 +183,7 @@ if ! $GH_ONLY; then
     echo "  [dry-run] Would set: $(echo "$ENV_JSON" | jq -r '[.[].key] | join(", ")')"
   else
     TMPFILE=$(mktemp)
-    caprover api \
+    caprover_api \
       --caproverName "$CAPROVER_NAME" \
       --method GET \
       --path /user/apps/appDefinitions \
@@ -202,7 +204,7 @@ if ! $GH_ONLY; then
     # envVars — this preserves instanceCount, volumes, and everything else.
     APP_CONFIG=$(echo "$EXISTING" | jq --argjson env "$ENV_JSON" '.envVars = $env')
 
-    caprover api \
+    caprover_api \
       --caproverName "$CAPROVER_NAME" \
       --method POST \
       --path /user/apps/appDefinitions/update \

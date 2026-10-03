@@ -91,6 +91,8 @@ pnpm dev
 # Frontend: http://localhost:5173 (proxies /api to :8080)
 ```
 
+The dev server listens on all interfaces (`host: true`), so it is reachable from outside a container or VM. To proxy `/api` somewhere other than `http://localhost:8080` (e.g. a container hostname or remote backend), set `API_PROXY_TARGET` before starting, e.g. `API_PROXY_TARGET=http://backend:8080 pnpm dev`.
+
 The `dev` script uses `nodemon` for the backend and `vite` for the frontend via `concurrently`. A dev user (`dev@local`) is seeded automatically and a `JWT_SECRET` is generated if one is not set.
 
 ### First deploy

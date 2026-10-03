@@ -12,6 +12,8 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/caprover-cli.sh"
+
 ENV_FILE=".env.local"
 DRY_RUN=false
 
@@ -57,7 +59,7 @@ CUSTOM_DOMAIN="${APP_NAME}.${APP_DOMAIN}"
 # ============================================================
 echo "==> Verifying caprover CLI login for $CAPROVER_URL..."
 
-CAPROVER_NAME=$(caprover ls 2>/dev/null \
+CAPROVER_NAME=$(caprover_list \
   | awk -v url="${CAPROVER_URL%/}" '$0 ~ url { print $2 }')
 
 if [[ -z "$CAPROVER_NAME" ]]; then
@@ -75,7 +77,7 @@ cap_api() {
     [[ -n "$body" ]] && echo "            $body"
     return
   fi
-  caprover api \
+  caprover_api \
     --caproverName "$CAPROVER_NAME" \
     --method "$method" \
     --path "$cli_path" \
@@ -140,7 +142,7 @@ if $DRY_RUN; then
   APP_CONFIG="$DEFAULT_APP_CONFIG"
 else
   TMPFILE=$(mktemp)
-  caprover api \
+  caprover_api \
     --caproverName "$CAPROVER_NAME" \
     --method GET \
     --path /user/apps/appDefinitions \

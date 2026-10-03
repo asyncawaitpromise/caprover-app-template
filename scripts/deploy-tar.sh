@@ -19,6 +19,8 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/caprover-cli.sh"
+
 ENV_FILE=".env.local"
 DRY_RUN=false
 TAR_FILE="./deploy.tar"
@@ -57,7 +59,7 @@ done
 
 # --- Find the caprover machine name matching CAPROVER_URL ---
 echo "==> Finding caprover CLI session for $CAPROVER_URL..."
-CAPROVER_NAME=$(caprover ls 2>/dev/null \
+CAPROVER_NAME=$(caprover_list \
   | awk -v url="$CAPROVER_URL" '$0 ~ url { print $2 }')
 
 if [[ -z "$CAPROVER_NAME" ]]; then
